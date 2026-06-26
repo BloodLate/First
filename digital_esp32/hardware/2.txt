@@ -1,0 +1,74 @@
+#include <WiFi.h>
+#include <DHT.h>
+#include <PubSubClient.h>
+
+// ===== WiFi配置 =====
+const char* ssid = "123";
+const char* password = "12345678";
+
+// ===== 阿里云MQTT配置（改成你的） =====
+const char* mqtt_server = "pf1c3cae.ala.cn-shenzhen.emqxsl.cn";
+const int mqtt_port = 1883;
+const char* clientId = "你的ClientID";
+const char* mqtt_user = "你的用户名";
+const char* mqtt_pass = "你的密码";
+const char* topic = "你的Topic";
+
+// ===== DHT配置 =====
+#define DHTPIN 13        // GPIO13
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  
+  // 连WiFi
+  WiFi.begin(ssid, password);
+  Serial.print("正在连接WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi连接成功");
+  
+  // 连MQTT
+  client.setServer(mqtt_server, mqtt_port);
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+  
+  // 读传感器
+  float temp = dht.readTemperature();
+  float humi = dht.readHumidity();
+  
+  // 拼接JSON
+  String payload = "{\"temp\":" + String(temp) + ",\"humi\":" + String(humi) + "}";
+  
+  // 发布
+  client.publish(topic, payload.c_str());
+  Serial.println("发送: " + payload);
+  
+  delay(2000);
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("连接阿里云MQTT...");
+    if (client.connect(clientId, mqtt_user, mqtt_pass)) {
+      Serial.println("成功");
+    } else {
+      Serial.print("失败，错误码: ");
+      Serial.println(client.state());
+      Serial.println("5秒后重试...");
+      delay(5000);
+    }
+  }
+}
